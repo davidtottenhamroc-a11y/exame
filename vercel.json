@@ -3,14 +3,14 @@
   "name": "vsoft-diagnostico-web",
   "builds": [
     {
-      "src": "index.html",
+      "src": "teste.html",
       "use": "@vercel/static-build"
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "/index.html"
+      "dest": "/teste.html"
     }
   ]
 }
