@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "name": "vsoft-diagnostico-web",
+  "builds": [
+    {
+      "src": "teste.html",
+      "use": "@vercel/static-build"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/teste.html"
+    }
+  ]
+}
