@@ -72,8 +72,11 @@
             border: 2px solid white;
             display: none; /* Escondido até o teste de câmera */
         }
-        /* O Logo da VSoft seria inserido aqui se você tivesse o arquivo */
-        /* Ex: .logo { background-image: url('vsoft_logo.png'); height: 50px; width: 50px; margin: 0 auto 10px; } */
+        img {
+            max-width: 100%;
+            margin-top: 10px;
+            border: 2px solid #fff;
+        }
     </style>
 </head>
 <body>
@@ -83,7 +86,7 @@
         <h1>VSoft | Ferramenta de Coleta e Diagnóstico</h1>
 
         <label for="data-limite">Data Limite da Coleta:</label>
-        <input type="date" id="data-limite" value="<?php echo date('Y-m-d'); ?>">
+        <input type="date" id="data-limite">
         
         <button id="iniciar-teste">Iniciar Testes de Hardware</button>
 
@@ -94,11 +97,171 @@
             <video id="camera-feed" autoplay></video>
             <p id="mic-status"></p>
             <p id="camera-status"></p>
-            <p id="logs-status"></p>
+            <p id="logs-status">Logs do EasyProctor e Eventos do Windows: Não coletável via web.</p>
         </div>
     </div>
 
-    <script src="api/index.js"></script>
-</body>
+    <script>
+        const dataLimiteInput = document.getElementById('data-limite');
+        const iniciarTesteBtn = document.getElementById('iniciar-teste');
+        const statusArea = document.getElementById('status-area');
+        const micStatus = document.getElementById('mic-status');
+        const cameraStatus = document.getElementById('camera-status');
+        const logsStatus = document.getElementById('logs-status');
+        const cameraFeed = document.getElementById('camera-feed');
 
+        // Função de utilidade para atualizar o status
+        function updateStatus(message, color = 'yellow') {
+            statusArea.textContent = `Status: ${message}`;
+            statusArea.style.color = color;
+        }
+
+        // ----------------------------------------------------
+        // FUNÇÕES DE TESTE DE MICROFONE (WebRTC)
+        // ----------------------------------------------------
+
+        async function testarMicrofone() {
+            updateStatus('Iniciando teste de microfone (requer permissão do navegador)...');
+            micStatus.textContent = "Status Microfone: Aguardando detecção...";
+
+            try {
+                // Pede acesso apenas ao áudio
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const analyser = audioContext.createAnalyser();
+                const microphone = audioContext.createMediaStreamSource(stream);
+                
+                microphone.connect(analyser);
+                analyser.fftSize = 256;
+                
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                let volumePico = 0;
+                
+                // Coleta o nível de som por 3 segundos
+                const tempoFim = Date.now() + 3000;
+                
+                function medirVolume() {
+                    analyser.getByteFrequencyData(dataArray);
+                    // Calcula a média ou soma para determinar o volume atual
+                    const volumeAtual = dataArray.reduce((a, b) => a + b) / dataArray.length;
+                    if (volumeAtual > volumePico) volumePico = volumeAtual;
+
+                    if (Date.now() < tempoFim) {
+                        requestAnimationFrame(medirVolume);
+                    } else {
+                        // Para o stream
+                        stream.getTracks().forEach(track => track.stop());
+                        
+                        const limiteVolume = 10; // Limite baixo para detecção de áudio
+                        if (volumePico > limiteVolume) {
+                            micStatus.textContent = "✅ Microfone: FUNCIONANDO (som detectado).";
+                            updateStatus('Microfone testado com sucesso!', 'lightgreen');
+                        } else {
+                            micStatus.textContent = "❌ Microfone: SILENCIOSO. Verifique se você deu a permissão e se o microfone está ligado.";
+                            updateStatus('Microfone testado. Detecção de som baixa.', 'orange');
+                        }
+                    }
+                }
+                medirVolume();
+
+            } catch (err) {
+                micStatus.textContent = "❌ Microfone: ERRO! Permissão negada ou microfone não encontrado.";
+                updateStatus('Erro no teste de microfone.', 'red');
+            }
+        }
+
+        // ----------------------------------------------------
+        // FUNÇÕES DE TESTE DE CÂMERA (WebRTC)
+        // ----------------------------------------------------
+
+        async function testarCamera() {
+            updateStatus('Iniciando teste de câmera (requer permissão do navegador)...', 'yellow');
+            cameraStatus.textContent = "Status Câmera: Aguardando feed...";
+            cameraFeed.style.display = 'block'; // Mostra o elemento de vídeo
+
+            try {
+                // Pede acesso apenas ao vídeo
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                cameraFeed.srcObject = stream;
+
+                // Ação de 'Print' (Adaptada para Web): Tira uma foto do feed da câmera e exibe.
+                setTimeout(() => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = cameraFeed.videoWidth;
+                    canvas.height = cameraFeed.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(cameraFeed, 0, 0, canvas.width, canvas.height);
+                    
+                    // Exibe a 'foto' como print na tela
+                    const img = document.createElement('img');
+                    img.src = canvas.toDataURL('image/png');
+                    
+                    cameraFeed.parentNode.insertBefore(img, cameraFeed.nextSibling);
+
+                    // Para o stream da câmera após a 'captura'
+                    stream.getTracks().forEach(track => track.stop());
+                    cameraFeed.style.display = 'none';
+
+                    cameraStatus.textContent = "✅ Câmera: FUNCIONANDO (Imagem capturada e exibida).";
+                    updateStatus('Teste de câmera concluído.', 'lightgreen');
+
+                }, 5000); // Espera 5 segundos para 'capturar' o print (em vez de 60s)
+
+            } catch (err) {
+                cameraFeed.style.display = 'none';
+                cameraStatus.textContent = "❌ Câmera: ERRO! Permissão negada ou câmera não encontrada.";
+                updateStatus('Erro no teste de câmera.', 'red');
+            }
+        }
+
+
+        // ----------------------------------------------------
+        // FUNÇÃO PRINCIPAL DE INÍCIO
+        // ----------------------------------------------------
+
+        iniciarTesteBtn.addEventListener('click', async () => {
+            // 1. Coleta a data
+            const dataLimite = dataLimiteInput.value;
+            
+            // Se o botão estava desabilitado, ignora
+            if (iniciarTesteBtn.disabled) return; 
+
+            // Limpa resultados anteriores
+            micStatus.textContent = "";
+            cameraStatus.textContent = "";
+            logsStatus.textContent = `Logs do EasyProctor e Eventos do Windows: Não coletável via web. Data Limite registrada: ${dataLimite}`;
+
+            const oldImg = cameraFeed.nextElementSibling;
+            if (oldImg && oldImg.tagName === 'IMG') {
+                oldImg.remove();
+            }
+            
+            iniciarTesteBtn.disabled = true;
+            updateStatus('Iniciando testes...');
+
+            // 2. Inicia os testes sequencialmente
+            // Usamos await para garantir que os testes não se sobreponham
+            await testarMicrofone();
+            await testarCamera();
+            
+            iniciarTesteBtn.disabled = false;
+            updateStatus('Todos os testes de hardware concluídos!', 'lightgreen');
+        });
+
+
+        // Define a data de hoje ao carregar a página (Formato YYYY-MM-DD)
+        function setTodayDate() {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0'); // Mês começa em 0
+            const dd = String(today.getDate()).padStart(2, '0');
+            dataLimiteInput.value = `${yyyy}-${mm}-${dd}`;
+        }
+        
+        // Inicializa a data de hoje quando a página carrega
+        setTodayDate();
+
+    </script>
+</body>
 </html>
