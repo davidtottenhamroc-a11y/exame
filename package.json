@@ -1,0 +1,17 @@
+{
+  "name": "vsoft-diagnostico-web",
+  "version": "1.0.0",
+  "description": "Ferramenta de diagnóstico web para testes de câmera e microfone.",
+  "main": "teste.html",
+  "scripts": {
+    "start": "open teste.html",
+    "test": "echo \"No tests defined\" && exit 0"
+  },
+  "keywords": [
+    "vercel",
+    "diagnostico",
+    "web"
+  ],
+  "author": "David",
+  "license": "ISC"
+}
