@@ -2,9 +2,9 @@
   "name": "Coleta-Exame",
   "version": "1.0.0",
   "description": "Coleta de Exame",
-  "main": "index.js",
+  "main": "api/index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node api/index.js"
   },
   "dependencies": {
     "express": "^4.19.2",
